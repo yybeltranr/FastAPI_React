@@ -9,18 +9,26 @@ lerna-debug.log*
 
 # Dependencies
 node_modules
+node_modules/
 
 # Build output
 dist
 dist-ssr
+dist/
+build/
 
 # Local environment
 *.local
 .env
 .env.*.local
+.envrc
+.venv/
+venv/
 
 # Editor directories and files
 .vscode/*
+.vscode/
+*.code-workspace
 !.vscode/extensions.json
 .idea
 .DS_Store
@@ -36,3 +44,7 @@ coverage
 # Caches
 .vite
 .eslintcache
+
+# Excel, logs u otros archivos generados
+*.xlsx
+*.xls

@@ -1,7 +1,10 @@
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
+*.py[cod]
 *$py.class
+*.pyo
+*.pyd
 
 # C extensions
 *.so
@@ -57,6 +60,7 @@ cover/
 
 # Django stuff:
 *.log
+*.sqlite3
 local_settings.py
 db.sqlite3
 db.sqlite3-journal
@@ -139,6 +143,7 @@ celerybeat.pid
 .envrc
 .venv
 env/
+.venv/
 venv/
 ENV/
 env.bak/
@@ -153,6 +158,7 @@ venv.bak/
 
 # mkdocs documentation
 /site
+uploads/
 
 # mypy
 .mypy_cache/
@@ -205,3 +211,18 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# Uploads temporales
+uploads/
+
+# VS Code
+.vscode/
+
+# Node / React
+node_modules/
+dist/
+build/
+
+# Excel, logs u otros archivos generados
+*.xlsx
+*.xls

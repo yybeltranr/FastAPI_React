@@ -4,6 +4,7 @@ python-multipart
 camelot-py[cv]
 pandas
 pypdf
-openpyxl
 pdfplumber
 tabula-py
+openpyxl
+pydantic
