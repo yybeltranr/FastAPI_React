@@ -325,7 +325,7 @@ def exportar_a_excel(resultados, plantilla_path, output_path):
     hoja = wb.worksheets[2]  # tercera hoja
     fila_inicio = 11
 
-    for i, res in enumerate(result55tados):
+    for i, res in enumerate(resultados):
         fila = fila_inicio + i
 
         # Texto
