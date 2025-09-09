@@ -1,0 +1,23 @@
+.modalCard {
+	border-radius: 16px;
+}
+.tituloModal {
+	border-radius: 15px 15px 0px 0px;
+	background-color: var(--color-two);
+	color: var(--color-four);
+}
+.modal-title {
+	font-family: 'Inter', sans-serif;
+	font-size: 1.1rem;
+}
+.btn-close {
+	background-color: var(--color-four);
+}
+@media screen and (max-width: 767px) {
+	.modalCard {
+		margin: 0.8em;
+	}
+	.modal-title {
+		font-size: 0.9rem;
+	}
+}

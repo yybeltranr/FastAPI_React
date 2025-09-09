@@ -1,0 +1,9 @@
+fastapi
+uvicorn[standard]
+python-multipart
+camelot-py[cv]
+pandas
+pypdf
+openpyxl
+pdfplumber
+tabula-py

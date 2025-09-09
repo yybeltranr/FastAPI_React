@@ -1,0 +1,85 @@
+.cardPpal {
+  text-align: justify;
+  margin: 5% 10% 0.5% 10%;
+  border-radius: 0 0 15px 15px;
+  background-color: white;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+.cardHeader {
+  background-color: white;
+  padding: 4% 2% 2% 2%;
+  text-align: center;
+  font-weight: 700;
+}
+.cardBodyPpal {
+  padding: 4% 10% 2% 10%;
+  border-radius: 0 0 20px 20px;
+}
+.buttons {
+	background-color: var(--color-three);
+	color: var(--color-four);
+	box-shadow: 0px 5px 5px 0px rgba(0,0,0,0.4);
+	font-weight: bold;
+	outline: none;
+	cursor: pointer;
+  display: inline-block;
+	font-family: 'Inter', sans-serif;
+	transition: all 0.5s ease;
+}
+.buttons:hover {
+	background-color: var(--color-two);
+	color: var(--color-four);
+	box-shadow: 0px 5px 5px 0px rgba(0,0,0,0.4);
+	font-weight: bold;
+	outline: none !important;
+	transform: scale(1.03);
+}
+hr {
+  border: none;
+  height: 3px; 
+  background: #333;
+}
+.cardSeleccion {
+  margin: 0.5% 10% 5% 10%;
+  border-radius: 15px;
+  background-color: white;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+.cardBodySeleccion {
+  padding: 4% 4% 4% 4%;
+}
+.form-check-input:checked {
+  background-color: var(--color-three);
+  border-color: var(--color-three);
+}
+.cardBanks {
+  border-radius: 15px;
+  background-color: white;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+.input-icon {
+	position: relative;
+}
+.input-icon i {
+	position: absolute;
+	top: 50%;
+	left: 10px;
+	transform: translateY(-50%);
+	color: #999;
+}
+.custom-input {
+	padding-left: 50px;
+	padding-right: 30px;
+	border: 2px solid #ccc;
+	border-radius: 6px;
+}
+.custom-input:focus {
+	box-shadow: none;
+	border-bottom-color: none;
+}
+.seePassw {
+	position: absolute;
+	padding-right: 0;
+	margin-left: 90%;
+	cursor: pointer;
+}
