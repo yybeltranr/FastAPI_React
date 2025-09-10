@@ -83,3 +83,78 @@ hr {
 	margin-left: 90%;
 	cursor: pointer;
 }
+.accordion-button::after {
+  flex-shrink: 0;
+  width: 1.25rem;
+  height: 1.25rem;
+  margin-left: auto;
+  content: "";
+  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='white' viewBox='0 0 16 16'%3e%3cpath fill-rule='evenodd' d='M1.646 4.646a.5.5 0 0 1 .708 0L8 10.293l5.646-5.647a.5.5 0 0 1 .708.708l-6 6a.5.5 0 0 1-.708 0l-6-6a.5.5 0 0 1 0-.708z'/%3e%3c/svg%3e");
+  background-repeat: no-repeat;
+  background-size: 1.25rem;
+  transition: all 0.2s ease-in-out;
+}
+.accordion-button {
+	background-color: var(--color-two);
+	color: var(--color-four);
+	box-shadow: 0px 5px 5px 0px rgba(0,0,0,0.4);
+	font-weight: bold;
+	outline: none;
+	cursor: pointer;
+	display: flex;
+	align-items: center;
+	transition: all 0.5s ease;
+}
+.accordion-button:not(.collapsed)::after {
+  transform: rotate(180deg);
+	background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='white' viewBox='0 0 16 16'%3e%3cpath fill-rule='evenodd' d='M1.646 4.646a.5.5 0 0 1 .708 0L8 10.293l5.646-5.647a.5.5 0 0 1 .708.708l-6 6a.5.5 0 0 1-.708 0l-6-6a.5.5 0 0 1 0-.708z'/%3e%3c/svg%3e");
+}
+.accordion-button:hover,
+.accordion-button:focus,
+.accordion-button:active,
+.accordion-button:visited,
+.accordion-button:not(.collapsed) {
+	background-color: var(--color-three);
+	color: var(--color-four);
+	box-shadow: 0px 5px 5px 0px rgba(0,0,0,0.4);
+	font-weight: bold;
+	outline: none !important;
+}
+.list-group-item {
+	font-size: 0.9em;
+	line-height: 1.05em;
+}
+.buttonsInside {
+	background-color: var(--color-two);
+	color: var(--color-four);
+	box-shadow: 0px 5px 5px 0px rgba(0,0,0,0.4);
+	outline: none;
+	cursor: pointer;
+  display: inline-block;
+	transition: all 0.5s ease;
+}
+.buttonsInside:hover {
+	background-color: var(--color-three);
+	color: var(--color-four);
+	box-shadow: 0px 5px 5px 0px rgba(0,0,0,0.4);
+	outline: none !important;
+	transform: scale(1.01);
+}
+textarea::-webkit-scrollbar {
+  width: 8px;
+}
+textarea::-webkit-scrollbar-thumb {
+  background-color: var(--color-two) !important;
+  border-radius: 4px;
+}
+textarea::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+textarea {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-two) #f1f1f1 !important;
+}
+.react-datepicker__month-dropdown::-webkit-scrollbar,
+.react-datepicker__year-dropdown::-webkit-scrollbar {
+  width: 6px;
+}

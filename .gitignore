@@ -214,6 +214,7 @@ __marimo__/
 
 # Uploads temporales
 uploads/
+outputs/
 
 # VS Code
 .vscode/

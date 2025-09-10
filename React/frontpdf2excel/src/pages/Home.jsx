@@ -1,15 +1,69 @@
-import { useState } from "react";
-import bancos from "../data/bancos";
+import { useEffect, useState } from "react"; 
+import { useForm, Controller } from "react-hook-form";
+import Swal from "sweetalert2";
+import { bancosFiltrados, tiposCaja, tiposCuenta, monedas, utilizaciones } from "../data/listas";
 import ModalComponent from "../components/ModalComponent";
 import { BsEyeFill, BsEyeSlashFill, BsLockFill } from "react-icons/bs";
-import './Home.css'
+import { API_BASE_URL } from "../apiConfig";
+import DatePicker from "react-datepicker";
+import "react-datepicker/dist/react-datepicker.css";
+import './Home.css';
 
 function Home() {
+  const { control, getValues } = useForm({
+    defaultValues: {
+      camposArchivos: {},
+      responsableCargo: "Gerencia General / Carlos Felipe Reyes Forero\nSubgerencia Corporativa / Javier Antonio Villarreal Villaquiran\nTesorera General / Irene Duarte Méndez",
+      poliza: "Poliza 930-64-994000000201 - 930-63-994000000156\nAseguradora Solidaria de Colombia",
+      fechaConciliacion: null
+    }
+  });
+
   const [seleccionados, setSeleccionados] = useState([]);
   const [archivos, setArchivos] = useState({});
   const [showModal, setShowModal] = useState(false);
+  const [excelListo, setExcelListo] = useState(false);
+  const [showModalGenerar, setShowModalGenerar] = useState(false);
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [resultados, setResultados] = useState({});
+  const [procesando, setProcesando] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [valores, setValores] = useState({});
+  const [isEditingExcel, setIsEditingExcel] = useState(false);
+  const [fechaConciliacion, setFechaConciliacion] = useState(null);
+  const [responsableCargo, setResponsableCargo] = useState("");
+  const [poliza, setPoliza] = useState("");
+
+  useEffect(() => {
+    setResponsableCargo(getValues("responsableCargo"));
+    setPoliza(getValues("poliza"));
+  }, [getValues]);
+
+  useEffect(() => {
+    const nuevosValores = {};
+    Object.entries(resultados).forEach(([banco, archivos]) => {
+      archivos.forEach((archivo, archivoIndex) => {
+        const keyArchivo = `${banco}-${archivoIndex}`;
+        if (!valores[keyArchivo]) {
+          const rawNumero = archivo.resultado?.texto?.["NÚMERO"] ?? archivo.resultado?.texto?.["NUMERO"] ?? "";
+          const cleanNumero = rawNumero.toString().replace(/\D/g, "");
+          const found = findUtilizacionByNumero(cleanNumero, utilizaciones);
+          const utilizacion = found?.u;
+          nuevosValores[keyArchivo] = {
+            subcuenta: { id: 3, nombre: tiposCaja.find(c => c.id === 3)?.nombre || "" },
+            moneda: { id: 1, nombre: monedas.find(m => m.id === 1)?.nombre || "" },
+            utilizacionTexto: utilizacion ? utilizacion.nombre : cleanNumero,
+            tasa: "",
+            fecha: utilizacion ? utilizacion.fecha : "",
+            observaciones: "",
+          };
+        }
+      });
+    });
+    setValores(prev => ({ ...prev, ...nuevosValores }));
+  }, [resultados]);
+
   const togglePasswordVisibility = () => setShowPassword(!showPassword);
 
   const closeModal = () => {
@@ -17,9 +71,10 @@ function Home() {
     setShowModal(false);
   };
 
+  const closeModalGenerar = () => setShowModalGenerar(false);
+
   const toggleBanco = (banco) => {
     if (seleccionados.some((b) => b.id === banco.id)) {
-      // Quitar banco -> borrar también archivos asociados
       setSeleccionados(seleccionados.filter((b) => b.id !== banco.id));
       setArchivos((prev) => {
         const nuevo = { ...prev };
@@ -27,12 +82,10 @@ function Home() {
         return nuevo;
       });
     } else {
-      // Agregar banco
       setSeleccionados([...seleccionados, banco]);
     }
   };
 
-  // Habilitar botón solo si todos los bancos seleccionados tienen al menos 1 archivo
   const handleArchivos = (bancoId, files) => {
     setArchivos((prev) => ({
       ...prev,
@@ -40,11 +93,189 @@ function Home() {
     }));
   };
 
-  const botonHabilitado =
-    seleccionados.length > 0 &&
-    seleccionados.every((b) => archivos[b.id] && archivos[b.id].length > 0);
+  const botonHabilitado = seleccionados.length > 0 && seleccionados.every((b) => archivos[b.id] && archivos[b.id].length > 0);
 
-  return (  
+  const procesarArchivos = async () => {
+    setProcesando(true);
+    setExcelListo(false);
+    const nuevosResultados = {};
+    const nuevosValores = {};
+
+    for (const banco of seleccionados) {
+      nuevosResultados[banco.nombre] = [];
+
+      for (const file of archivos[banco.id] || []) {
+        const formData = new FormData();
+        formData.append("file", file);
+
+        const response = await fetch(`${API_BASE_URL}/pdf/procesar`, {
+          method: "POST",
+          body: formData,
+        });
+        
+        const data = await response.json();
+        console.log("Respuesta del backend para el archivo", data);
+        nuevosResultados[banco.nombre].push({
+          nombreArchivo: file.name,
+          resultado: data,
+        });
+
+        // Inicializamos valores para este archivo
+        const keyArchivo = `${banco.nombre}-${nuevosResultados[banco.nombre].length - 1}`;
+        const rawNumero = data?.texto?.["NÚMERO"] ?? data?.texto?.["NUMERO"] ?? "";
+        const cleanNumero = rawNumero.toString().replace(/\D/g, "");
+        const found = findUtilizacionByNumero(cleanNumero, utilizaciones);
+        const utilizacion = found?.u;
+
+        nuevosValores[keyArchivo] = {
+          subcuenta: { id: 3, nombre: tiposCaja.find(c => c.id === 3)?.nombre || "" },
+          moneda: { id: 1, nombre: monedas.find(m => m.id === 1)?.nombre || "" },
+          utilizacionTexto: utilizacion ? utilizacion.nombre : cleanNumero,
+          tasa: "",
+          fecha: utilizacion ? utilizacion.fecha : "",
+          observaciones: "",
+        };
+      }
+    }
+
+    setResultados(nuevosResultados);
+    setValores(prev => ({ ...prev, ...nuevosValores }));
+    setProcesando(false);
+    setExcelListo(true);
+  };
+
+  function findUtilizacionByNumero(num, utilizaciones) {
+    if (!num) return undefined;
+    const cleanNum = num.toString().replace(/\D/g, "");
+
+    for (const u of utilizaciones) {
+      const idClean = u.id.toString().replace(/\D/g, "");
+      if (cleanNum === idClean) return { u, match: "exact" };
+    }
+
+    for (const u of utilizaciones) {
+      const idClean = u.id.toString().replace(/\D/g, "");
+      if (cleanNum.endsWith(idClean)) return { u, match: "endsWith" };
+    }
+
+    for (const u of utilizaciones) {
+      const idClean = u.id.toString().replace(/\D/g, "");
+      if (cleanNum.includes(idClean)) return { u, match: "includes" };
+    }
+
+    const maxK = Math.min(12, cleanNum.length);
+    for (let k = maxK; k >= 4; k--) {
+      for (const u of utilizaciones) {
+        const idClean = u.id.toString().replace(/\D/g, "");
+        if (!idClean || idClean.length < k) continue;
+        if (cleanNum.slice(-k) === idClean.slice(-k)) {
+          return { u, match: `suffix-${k}` };
+        }
+      }
+    }
+    return undefined;
+  }
+
+  const actualizar = (keyArchivo, campo, valor) => {
+    // Mapeo de campos que requieren id + nombre
+    const listasMap = {
+      subcuenta: tiposCaja,
+      moneda: monedas,
+      tipoCuenta: tiposCuenta,
+      banco: bancosFiltrados
+    };
+
+    let nuevoValor = valor;
+
+    if (listasMap[campo]) {
+      const lista = listasMap[campo];
+      const encontrado = lista.find(item => item.id === valor);
+      nuevoValor = encontrado ? { id: encontrado.id, nombre: encontrado.nombre } : { id: valor, nombre: "" };
+    }
+
+    setValores(prev => ({
+      ...prev,
+      [keyArchivo]: {
+        ...prev[keyArchivo],
+        [campo]: nuevoValor ?? "",
+      }
+    }));
+  };
+
+  const validarCampos = () => {
+    for (const valoresArchivo of Object.values(valores)) {
+      if (!valoresArchivo.subcuenta && valoresArchivo.subcuenta !== 0) return false;
+      if (!valoresArchivo.moneda && valoresArchivo.moneda !== 0) return false;
+      if (!valoresArchivo.utilizacionTexto || valoresArchivo.utilizacionTexto.trim() === "") return false;
+      if (!valoresArchivo.tasa || valoresArchivo.tasa === "") return false;
+      if (!valoresArchivo.fecha || valoresArchivo.fecha.trim() === "") return false;
+    }
+    return true;
+  };
+
+  const handleGenerarExcel = () => {
+    if (!validarCampos()) {
+      Swal.fire({
+        icon: "warning",
+        title: "Campos incompletos",
+        text: "Por favor, complete todos los campos obligatorios * antes de generar el informe. Las observaciones son opcionales.",
+        confirmButtonText: "Aceptar"
+      });
+      return;
+    }
+    setShowModalGenerar(true);
+  };
+
+  const toggleEdit = () => setIsEditingExcel(!isEditingExcel);
+
+  const descargarExcel = async () => {
+    try {
+      const valoresParaEnviar = JSON.parse(JSON.stringify(valores));
+      const payload = {
+        fechaConciliacion,
+        responsableCargo,
+        poliza,
+        resultados,
+        valores_frontend: valoresParaEnviar
+      };
+
+      console.log("Payload que se enviará al backend:", payload);
+      const response = await fetch(`${API_BASE_URL}/pdf/exportar-excel`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) throw new Error("Error al generar el Excel");
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      const fechaStr = fechaConciliacion 
+        ? fechaConciliacion.toLocaleDateString("es-CO").replace(/\//g, "_")
+        : "";
+      link.href = url;
+      link.setAttribute("download", `Informe_SIVICOF_${fechaStr}.xlsx`);
+      document.body.appendChild(link);
+      link.click();
+      link.parentNode.removeChild(link);
+      closeModalGenerar();
+      Swal.fire({
+        icon: 'success',
+        title: 'Éxito',
+        text: 'El informe en Excel se ha generado y descargado correctamente.',
+      });
+    } catch (error) {
+      console.error("Error descargando el Excel:", error);
+      Swal.fire({
+        icon: 'error',
+        title: 'Error',
+        text: 'No se pudo generar el Excel. Intenta nuevamente.',
+      });
+    }
+  };
+
+  return (
     <div className="general-content">
       <div className="card cardPpal">
         <h4 className="card-header cardHeader">Automatización de informes</h4>
@@ -65,13 +296,13 @@ function Home() {
           <br />
         </div>
       </div>
+
+      {/* Selección de bancos */}
       <div className="card cardSeleccion text-start">
         <div className="card-body cardBodySeleccion">
-          <p className="fw-bold">
-            Seleciona los bancos que deseas incluir en el informe:
-          </p>
+          <p className="fw-bold">Selecciona los bancos que deseas incluir en el informe:</p>
           <div className="row">
-            {bancos.map((banco) => (
+            {bancosFiltrados.map((banco) => (
               <div className="col-md-4" key={banco.id}>
                 <div className="form-check">
                   <input
@@ -91,6 +322,7 @@ function Home() {
 
           <hr />
 
+          {/* Archivos por banco */}
           <div className="row">
             {seleccionados.map((banco) => (
               <div className="col-md-12 col-lg-6 col-xl-3 mb-3" key={banco.id}>
@@ -100,14 +332,12 @@ function Home() {
                     <p className="card-text">
                       Selecciona los PDFs correspondientes a <b>{banco.nombre}</b> para procesar:
                     </p>
-                    <input 
-                      type="file" 
-                      multiple 
-                      accept="application/pdf" 
+                    <input
+                      type="file"
+                      multiple
+                      accept="application/pdf"
                       className="form-control"
-                      onChange={(e) =>
-                        handleArchivos(banco.id, e.target.files)
-                      }
+                      onChange={(e) => handleArchivos(banco.id, e.target.files)}
                     />
                   </div>
                 </div>
@@ -116,96 +346,334 @@ function Home() {
           </div>
 
           <hr />
-
-          <p className="text-muted fst-italic" style={{fontSize: '0.9em'}}>
+          <p className="text-muted fst-italic" style={{ fontSize: '0.9em' }}>
             <b>Nota: </b>El botón para procesar los PDFs solo se activará una vez hayas seleccionado al 
-            menos un archivo por cada banco elegido. Si no seleccionas ningún banco, el botón 
-            permanecerá deshabilitado. Si no tienes archivos para alguno de los bancos seleccionados,
-            por favor, deselecciónalo antes de proceder.
+            menos un archivo por cada banco elegido.
           </p>
 
           <div className="d-flex justify-content-center align-items-center flex-column"> 
             <button 
-              type="submit" 
+              type="button" 
               className="btn buttons text-center m-4" 
               style={{width: '40%'}} 
               disabled={!botonHabilitado}
-              
               onClick={() => setShowModal(true)}
             >
               Procesar todos los archivos
             </button>
+          </div>   
 
-            <ModalComponent 
-              show={showModal}
-              handleClose={closeModal}
-              titulo="Password"
-              bodyMessage={
-                <div className='container-fluid text-center p-4'>
-                  Uno o varios archivos PDF pueden requerir una contraseña para abrirse.
-                  <br />
-                  Por favor, ingresa la contraseña a continuación:
-                  <div className="mb-3 position-relative">
-                    <div className="input-icon">
-                      <i className="bi bi-lock">
-                        <BsLockFill />
-                      </i>
-                      <i
-                        className="toggle-password-icon seePassw"
-                        onClick={togglePasswordVisibility}
-                      >
-                        {showPassword ? <BsEyeFill /> : <BsEyeSlashFill />}
-                      </i>
-                      <input 
-                        type={showPassword ? "text" : "password"}
-                        className="form-control custom-input mt-3" 
-                        id="password"
-                        value={password}
-                        onChange={(e) => {
-                          const value = e.target.value.replace(/[^0-9]/g, "");
-                          setPassword(value);
-                        }}
-                      />
-                    </div>
-                    <button 
-                      type="submit" 
-                      className="btn buttons text-center mt-4" 
-                      style={{width: '40%'}}
-                    >
-                      Continuar
-                    </button>
-                  </div>
-                </div>
-              }
-              customButton={''}
-              dialogClass="modal-md"
-              showFooter = {false}
-            />
+          {procesando && (
+            <div className="text-center my-4">
+              <div className="spinner-border text-secondary" role="status">
+                <span className="visually-hidden">Procesando...</span>
+              </div>
+              <p className="mt-3 fw-bold">Procesando archivos, por favor espera...</p>
+            </div>
+          )}
 
-            <div className="accordion" id="accordionPanelsBanks">
-              <div className="accordion-item">
-                <h2 className="accordion-header">
-                  <button className="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#panelsStayOpen-collapseOne" aria-expanded="true" aria-controls="panelsStayOpen-collapseOne">
-                    Accordion Item #1
+          {/* Resultados */}
+          <div className="accordion mt-3" id="resultadosAccordion">
+            {Object.entries(resultados).map(([banco, archivos], bancoIndex) => (
+              <div className="accordion-item" key={bancoIndex}>
+                <h2 className="accordion-header" id={`heading-${bancoIndex}`}>
+                  <button
+                    className="accordion-button collapsed fw-bold"
+                    type="button"
+                    data-bs-toggle="collapse"
+                    data-bs-target={`#collapse-${bancoIndex}`}
+                    aria-expanded="false"
+                    aria-controls={`collapse-${bancoIndex}`}
+                  >
+                    {banco}
                   </button>
                 </h2>
-                <div id="panelsStayOpen-collapseOne" className="accordion-collapse collapse show">
+
+                <div
+                  id={`collapse-${bancoIndex}`}
+                  className="accordion-collapse collapse"
+                  aria-labelledby={`heading-${bancoIndex}`}
+                  data-bs-parent="#resultadosAccordion"
+                >
                   <div className="accordion-body">
-                    <strong>This is the first item’s accordion body.</strong> It is shown by default, until the collapse plugin adds 
-                    the appropriate classes that we use to style each element. These classes control the overall appearance, as well 
-                    as the showing and hiding via CSS transitions. You can modify any of this with custom CSS or overriding our default 
-                    variables. It’s also worth noting that just about any HTML can go within the <code>.accordion-body</code>, though the transition does limit overflow.
+                    {archivos.map((archivo, archivoIndex) => {
+                      const keyArchivo = `${banco}-${archivoIndex}`;
+                      const valoresArchivo = valores[keyArchivo] || {
+                        subcuenta: { id: 3, nombre: tiposCaja.find(c => c.id === 3)?.nombre || "" },
+                        moneda: { id: 1, nombre: monedas.find(m => m.id === 1)?.nombre || "" },
+                        utilizacionTexto: "",
+                        tasa: "",
+                        fecha: "",
+                        observaciones: "",
+                      };
+
+                      return (
+                        <div key={archivoIndex} className="mb-4">
+                          <h5 className="fst-italic fw-medium">{archivo.nombreArchivo}</h5>
+
+                          {/* Información del PDF */}
+                          <ul className="list-group list-group-flush mb-3">
+                            {archivo.resultado?.texto &&
+                              Object.entries(archivo.resultado.texto).map(([key, value]) => (
+                                <li key={key} className="list-group-item">
+                                  <strong>{key}:</strong> {value}
+                                </li>
+                              ))}
+                          </ul>
+
+                          {/* Movimientos */}
+                          <p className="fst-italic fw-medium">Movimientos del mes:</p>
+                          <ul className="list-group list-group-flush">
+                            {archivo.resultado?.tablas &&
+                              Object.entries(archivo.resultado.tablas).map(([key, value]) => (
+                                <li key={key} className="list-group-item">
+                                  <strong>{key}:</strong> {value}
+                                </li>
+                              ))}
+                          </ul>
+
+                          {/* Campos editables */}
+                          <div className="mt-3">
+                            <label className="form-label fst-italic fw-medium">* Subcuenta efectivo:</label>
+                            <select
+                              className="form-select mb-2"
+                              disabled={!isEditing}
+                              value={valoresArchivo.subcuenta?.id || ""}
+                              onChange={(e) =>
+                                actualizar(keyArchivo, "subcuenta", Number(e.target.value))
+                              }
+                            >
+                              {tiposCaja.map(caja => (
+                                <option key={caja.id} value={caja.id}>
+                                  {caja.nombre}
+                                </option>
+                              ))}
+                            </select>
+
+                            <label className="form-label fst-italic fw-medium">* Moneda:</label>
+                            <select
+                              className="form-select mb-2"
+                              disabled={!isEditing}
+                              value={valoresArchivo.moneda?.id || ""}
+                              onChange={(e) =>
+                                actualizar(keyArchivo, "moneda", Number(e.target.value))
+                              }
+                            >
+                              {monedas.map(moneda => (
+                                <option key={moneda.id} value={moneda.id}>
+                                  {moneda.nombre}
+                                </option>
+                              ))}
+                            </select>
+
+                            <label className="form-label fst-italic fw-medium">* Utilización:</label>
+                            <textarea
+                              className="form-control mb-2"
+                              rows={2}
+                              disabled={!isEditing}
+                              value={valoresArchivo.utilizacionTexto}
+                              onChange={(e) =>
+                                actualizar(keyArchivo, "utilizacionTexto", e.target.value)
+                              }
+                            />
+
+                            <label className="form-label fst-italic fw-medium">* Tasa de interés bancario:</label>
+                            <input
+                              type="number"
+                              className="form-control mb-2"
+                              placeholder="Ingrese la tasa (%)"
+                              value={valoresArchivo.tasa}
+                              onChange={(e) =>
+                                actualizar(keyArchivo, "tasa", e.target.value)
+                              }
+                            />
+
+                            <label className="form-label fst-italic fw-medium">* Fecha de constitución:</label>
+                            <input
+                              type="text"
+                              className="form-control mb-2"
+                              disabled={!isEditing}
+                              value={valoresArchivo.fecha}
+                              onChange={(e) =>
+                                actualizar(keyArchivo, "fecha", e.target.value)
+                              }
+                            />
+
+                            <label className="form-label fst-italic fw-medium">Observaciones:</label>
+                            <textarea
+                              className="form-control mb-2"
+                              rows={2}
+                              value={valoresArchivo.observaciones}
+                              onChange={(e) =>
+                                actualizar(keyArchivo, "observaciones", e.target.value)
+                              }
+                            />
+                          </div>
+                          <div className="d-flex justify-content-center">
+                            <button
+                              type="button"
+                              className="btn buttonsInside m-4"
+                              style={{ width: "30%" }}
+                              onClick={() => setIsEditing(!isEditing)}
+                            >
+                              {isEditing ? "Guardar" : "Editar campos inhabilitados"}
+                            </button>
+                          </div>
+                          <hr />
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               </div>
-            </div>
-          </div>   
-            
-          
+            ))}
+          </div>
         </div>
+
+        <hr />
+
+        <div className="d-flex justify-content-center align-items-center flex-column"> 
+          <button 
+            type="button" 
+            className="btn buttons text-center m-4" 
+            style={{width: '40%'}} 
+            disabled={!excelListo}
+            onClick={handleGenerarExcel}
+          >
+            Generar informe en Excel
+          </button>
+        </div> 
       </div>
-    </div>  
-  )
+
+      {/* Modal Password */}
+      <ModalComponent 
+        show={showModal}
+        handleClose={closeModal}
+        titulo="Password"
+        bodyMessage={
+          <div className='container-fluid text-center p-4'>
+            Uno o varios archivos PDF pueden requerir una contraseña para abrirse.
+            <br />
+            Por favor, ingresa la contraseña a continuación:
+            <div className="mb-3 position-relative">
+              <div className="input-icon">
+                <i className="bi bi-lock"><BsLockFill /></i>
+                <i
+                  className="toggle-password-icon seePassw"
+                  onClick={togglePasswordVisibility}
+                >
+                  {showPassword ? <BsEyeFill /> : <BsEyeSlashFill />}
+                </i>
+                <input 
+                  type={showPassword ? "text" : "password"}
+                  className="form-control custom-input mt-3" 
+                  id="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value.replace(/[^0-9]/g, ""))}
+                />
+              </div>
+              <button 
+                type="button" 
+                className="btn buttons text-center mt-4" 
+                style={{width: '40%'}}
+                disabled={!password}
+                onClick={async () => {
+                  closeModal();
+                  setProcesando(true);
+                  await procesarArchivos(); 
+                  setProcesando(false);
+                }}
+              >
+                Continuar
+              </button>
+            </div>
+          </div>
+        }
+        customButton={''}
+        dialogClass="modal-md"
+        showFooter={false}
+      />
+
+      {/* Modal Generar Excel */}
+      <ModalComponent 
+        show={showModalGenerar}
+        handleClose={closeModalGenerar}
+        titulo="Generando informe..."
+        bodyMessage={
+          <div className='container-fluid text-start p-4'>
+            <label htmlFor="responsableCargo" className="form-label fst-italic fw-medium">
+              Responsable / Cargo
+            </label>
+            <textarea
+              id="responsableCargo"
+              className="form-control mb-4"
+              rows={3}
+              disabled={!isEditingExcel}
+              value={responsableCargo}
+              onChange={(e) => setResponsableCargo(e.target.value)}
+            />
+            <label htmlFor="poliza" className="form-label fst-italic fw-medium">
+              Póliza de manejo
+            </label>
+            <textarea
+              id="poliza"
+              className="form-control mb-4"
+              rows={2}
+              disabled={!isEditingExcel}
+              value={poliza}
+              onChange={(e) => setPoliza(e.target.value)}
+            />
+            <label htmlFor="fechaConciliacion" className="form-label fst-italic fw-medium">
+              Fecha de conciliación
+            </label>
+            <Controller
+              control={control}
+              name="fechaConciliacion"
+              render={({ field }) => (
+                <DatePicker
+                  className="form-control"
+                  selected={fechaConciliacion}
+                  onChange={(date) => { field.onChange(date); setFechaConciliacion(date); }}
+                  dateFormat="dd/MM/yyyy"
+                  placeholderText="Seleccione una fecha"
+                  showMonthDropdown
+                  showYearDropdown
+                  dropdownMode="select"
+                />
+              )}
+            />
+
+            <div className="d-flex justify-content-center">
+              <button
+                type="button"
+                className="btn buttonsInside m-4"
+                style={{ width: "80%" }}
+                onClick={toggleEdit}
+              >
+                {isEditingExcel ? "Guardar" : "Editar campos inhabilitados"}
+              </button>
+            </div>
+
+            <hr />  
+            <div className="d-flex justify-content-end mt-4"> 
+              <button 
+                type="button" 
+                className="btn buttons text-center m-2" 
+                style={{width: '40%'}} 
+                disabled={!fechaConciliacion}
+                onClick={descargarExcel}
+              >
+                Descargar Excel
+              </button>
+            </div> 
+          </div>
+        }
+        customButton={''}
+        dialogClass="modal-lg"
+        showFooter={false}
+      />
+    </div>
+  );
 }
 
-export default Home
+export default Home;

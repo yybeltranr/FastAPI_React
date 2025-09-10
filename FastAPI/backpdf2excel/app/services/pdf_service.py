@@ -22,7 +22,6 @@ def extraer_texto(pdf_path):
         #for i, ln in enumerate(lines, 1):
         #    print(f"[LÍNEA {i}] {ln}")
 
-
         # Extraer posibles números de cuenta del nombre del archivo
         filename = os.path.basename(pdf_path)
         # Buscar secuencias de 8 a 20 dígitos en el nombre (cuentas largas aunque terminen en _ o -)
@@ -104,12 +103,17 @@ def extraer_texto(pdf_path):
             else:
                 info_textual[key] = val.strip() if val else "No encontrado"
 
-        return info_textual
-
         if info_textual["CUENTA"] == "No encontrado" and info_textual["NÚMERO"] == "No encontrado":
             # Caso especial Davivienda
             davivienda_info = extraer_davivienda(lines, ultimos4)
             info_textual.update(davivienda_info)
+
+        if info_textual["CUENTA"] == "AHORROS":
+            info_textual["CUENTA"] = "1 Ahorros" 
+        if info_textual["CUENTA"] == "CORRIENTE":
+            info_textual["CUENTA"] = "2 Corriente"
+
+        return info_textual
 
     except Exception as e:
         print(f"[ERROR] {e}")
@@ -295,6 +299,205 @@ def extraer_tablas(pdf_path):
     return info_tablas_ordenado
 
 
+def find_sequential_words_coords_all(pdf_path, word1, word2, word3, y_tolerance=1):
+    """
+    Busca tres palabras secuenciales en la misma línea en todo el documento.
+    Retorna una lista de tuplas, donde cada tupla contiene el número de página y las coordenadas
+    de la palabra del medio.
+
+    Args:
+        pdf_path (str): La ruta al archivo PDF.
+        word1 (str): La primera palabra a buscar.
+        word2 (str): La segunda palabra a buscar.
+        word3 (str): La tercera palabra a buscar.
+        y_tolerance (float): La tolerancia en el eje Y para considerar que las palabras están en la misma línea.
+
+    Returns:
+        list: Una lista de tuplas. Cada tupla es (page_number, (x0, top, x1, bottom)).
+              Retorna una lista vacía si no se encuentra la secuencia.
+    """
+    results = []
+    with pdfplumber.open(pdf_path) as pdf:
+        for page in pdf.pages:
+            words = page.extract_words()
+            for i in range(len(words) - 2):
+                current_word = words[i]
+                next_word = words[i+1]
+                next_next_word = words[i+2]
+
+                # Comprobar si las palabras coinciden
+                if (current_word['text'] == word1 and
+                    next_word['text'] == word2 and
+                    next_next_word['text'] == word3):
+
+                    # Comprobar si están en la misma línea usando la tolerancia y
+                    if (abs(next_word['top'] - current_word['top']) <= y_tolerance and
+                        abs(next_next_word['top'] - current_word['top']) <= y_tolerance):
+
+                        page_number = page.page_number
+                        coords = (next_word['x0'], next_word['top'], next_word['x1'], next_word['bottom'])
+                        results.append((page_number, coords))
+    return results
+
+def get_numbers_below_coordinates(pdf_path, coordinates_list):
+    """
+    Busca y retorna las palabras que se encuentran por debajo de una lista de coordenadas,
+    filtrando solo los números con el formato especificado.
+
+    Args:
+        pdf_path (str): La ruta al archivo PDF.
+        coordinates_list (list): Una lista de tuplas en el formato (page_number, (x0, top, x1, bottom)).
+
+    Returns:
+        dict: Un diccionario donde la clave es el número de página y el valor es una lista
+              de strings que cumplen con el formato numérico.
+    """
+    results = {}
+
+    coords_by_page = {}
+    for page_num, coords in coordinates_list:
+        if page_num not in coords_by_page:
+            coords_by_page[page_num] = []
+        coords_by_page[page_num].append(coords)
+
+    # Expresión regular para números con formato de miles y decimales.
+    number_pattern = re.compile(
+    r'^\$?'
+    r'-?'
+    r'[\d,.]+'
+    r'\+?'
+    r'$'
+    )
+
+    with pdfplumber.open(pdf_path) as pdf:
+        for page_number, page in enumerate(pdf.pages, start=1):
+            if page_number in coords_by_page:
+                all_words = page.extract_words()
+                page_numbers = []
+
+                for x0_ref, _, x1_ref, y1_ref in coords_by_page[page_number]:
+                    for word in all_words:
+                        word_x0 = word['x0']
+                        word_x1 = word['x1']
+                        word_y1 = word['bottom']
+
+                        # Condición 1: El 'y' de la palabra debe estar por debajo del 'y' de referencia
+                        is_below = word_y1 > y1_ref
+
+                        # Condición 2: La palabra debe estar en el "carril" vertical de la columna de referencia.
+                        # Asumimos que la columna tiene un ancho de 50 puntos a la izquierda y 50 a la derecha
+                        # de las coordenadas del encabezado.
+                        x_in_column = (word_x0 >= x0_ref - 50) and (word_x1 <= x1_ref + 50)
+
+                        # Condición 3: La palabra debe coincidir con el patrón numérico
+                        is_number = number_pattern.match(word['text'])
+
+                        if is_below and x_in_column and is_number:
+                            page_numbers.append(word['text'])
+
+                if page_numbers:
+                    results[page_number] = page_numbers
+    return results
+
+def format_number_with_commas(number):
+    """
+    Formatea un número (float o int) a una cadena con comas como separadores
+    de miles y dos decimales.
+    """
+    if not isinstance(number, (int, float)):
+        return None
+    return f"{number:,.2f}"
+
+def clean_number_string(number_str):
+    """
+    Limpia un string de caracteres no numéricos como $, +, y espacios.
+    """
+    cleaned = number_str.strip().replace('$', '').replace('+', '').strip()
+    return cleaned
+
+def find_max_absolute_value(data_dict):
+    """
+    Encuentra el valor numérico con el valor absoluto más grande en un diccionario
+    de listas de strings, manejando diferentes formatos de números.
+    """
+    max_value = None
+
+    for page_numbers in data_dict.values():
+        for number_str in page_numbers:
+            try:
+                # 1. Limpiar el string de símbolos no numéricos
+                cleaned_str = clean_number_string(number_str)
+
+                # 2. Lógica para determinar el formato de los separadores
+                last_period = cleaned_str.rfind('.')
+                last_comma = cleaned_str.rfind(',')
+
+                if last_comma > last_period:
+                    # Formato europeo/latinoamericano: '1.234,56'
+                    cleaned_final = cleaned_str.replace('.', '').replace(',', '.')
+                elif last_period > last_comma:
+                    # Formato estadounidense: '1,234.56'
+                    cleaned_final = cleaned_str.replace(',', '')
+                else:
+                    # Formato sin separadores o con solo uno
+                    cleaned_final = cleaned_str
+
+                # 3. Convertir el string limpio a un número flotante
+                current_value = float(cleaned_final)
+
+                # 4. Comparar y actualizar el valor máximo
+                if max_value is None or abs(current_value) > abs(max_value):
+                    max_value = current_value
+            except ValueError:
+                continue
+
+    return max_value
+
+def encontrar_maximo_movimiento(pdf_path, banco):
+    listado_bancos=["24 Bancolombia", "30 BBVA Colombia", "15 Banco de Occidente", "6 Banco Davivienda", "36 Colpatria Red Multibanca", "48 ITAÚ BBA Colombia S.A.", "2 Banagrario"]
+    if banco not in listado_bancos:
+        return "Banco no encontrado"
+
+    word1 = ""
+    word2 = ""
+    word3 = ""
+
+    if banco == "24 Bancolombia":
+        word1 = "DCTO."
+        word2 = "VALOR"
+        word3 = "SALDO"
+    elif banco == "30 BBVA Colombia":
+      #los encabezados de las paginas no tienen capa de texto
+        word1 = "DE"
+        word2 = "AHORROS"
+        word3 = "EMPRESARIAL"
+    elif banco == "36 Colpatria Red Multibanca":
+        word1 = "DESCRIPCION"
+        word2 = "MONTO"
+        word3 = "SALDO"
+    elif banco == "6 Banco Davivienda":
+        word1 = "Fecha"
+        word2 = "Valor"
+        word3 = "Doc."
+    elif banco == "15 Banco de Occidente":
+      #asumo que solo se usan los creditos, no se si tambien debitos
+        word1 = "DEBITOS"
+        word2 = "CREDITOS"
+        word3 = "SALDO"
+
+    coordenadas_encontradas = find_sequential_words_coords_all(pdf_path, word1, word2, word3)
+    if not coordenadas_encontradas:
+        return "No se encontraron las coordenadas de los encabezados de la tabla."
+
+    numeros_encontrados = get_numbers_below_coordinates(pdf_path, coordenadas_encontradas)
+
+    if not numeros_encontrados:
+        return "No se encontraron números válidos en el PDF para el banco especificado."
+
+    max_abs_value = find_max_absolute_value(numeros_encontrados)
+
+    return format_number_with_commas(max_abs_value)
+
 
 def normalizar_numero(valor: str):
     if not valor or str(valor).strip() in ["", ".", ","]:
@@ -320,26 +523,66 @@ def normalizar_numero(valor: str):
         return None
     
 
-def exportar_a_excel(resultados, plantilla_path, output_path):
+def exportar_a_excel(resultados, valores_frontend, fecha_conciliacion, responsable_cargo, poliza, plantilla_path, output_path):
     wb = load_workbook(plantilla_path)
     hoja = wb.worksheets[2]  # tercera hoja
     fila_inicio = 11
+    fila = fila_inicio
 
-    for i, res in enumerate(resultados):
-        fila = fila_inicio + i
+    for banco_nombre, archivos in resultados.items():
+        for idx, archivo in enumerate(archivos):
+            keyArchivo = f"{banco_nombre}-{idx}"
+            valores = valores_frontend.get(keyArchivo, {})
 
-        # Texto
-        hoja[f"D{fila}"] = res["texto"].get("CUENTA", "")
-        hoja[f"F{fila}"] = res["texto"].get("NÚMERO", "")
+            # Subcuenta
+            subcuenta = valores.get("subcuenta", {})
+            hoja[f"C{fila}"] = f"{subcuenta.get('id', '')} {subcuenta.get('nombre', '')}".strip()
 
-        # Tablas (aseguramos que haya 4 valores)
-        valores_tabla = list(res["tablas"].values())[:4]
-        for j, val in enumerate(valores_tabla):
-            col = chr(ord("I") + j)  # I, J, K, L
-            numero = normalizar_numero(val)
-            hoja[f"{col}{fila}"] = numero if numero is not None else val
+            # Texto extraído
+            hoja[f"D{fila}"] = archivo["resultado"]["texto"].get("CUENTA", "")
+            hoja[f"F{fila}"] = archivo["resultado"]["texto"].get("NÚMERO", "")
 
+            # Nombre del accordion (banco)
+            hoja[f"E{fila}"] = banco_nombre
+           
+            # Moneda enviada desde frontend
+            moneda = valores.get("moneda", {})
+            hoja[f"G{fila}"] = f"{moneda.get('id', '')} {moneda.get('nombre', '')}".strip()
 
-    # Guardar archivo final
+            # Utilización
+            hoja[f"H{fila}"] = valores.get("utilizacionTexto", "")
+
+            # Tablas (4 columnas)
+            tablas = archivo["resultado"].get("tablas", {})
+            for j, val in enumerate(list(tablas.values())[:4]):
+                col = chr(ord("I") + j)  # I, J, K, L
+                hoja[f"{col}{fila}"] = normalizar_numero(val) if normalizar_numero(val) is not None else val
+
+            # Celda M11 vacía
+            hoja[f"M{fila}"] = ""
+
+            # Tasa
+            hoja[f"N{fila}"] = valores.get("tasa", "")
+
+            # Responsable / Cargo
+            hoja[f"O{fila}"] = responsable_cargo
+
+            # Póliza
+            hoja[f"P{fila}"] = poliza
+
+            # Fecha constitución
+            hoja[f"Q{fila}"] = valores.get("fecha", "")
+
+            # Celda R vacía
+            hoja[f"R{fila}"] = ""
+
+            # Fecha conciliación
+            hoja[f"S{fila}"] = fecha_conciliacion.split('T')[0].replace("-", "/") or ""
+
+            # Observaciones
+            hoja[f"T{fila}"] = valores.get("observaciones", "")
+
+            fila += 1
+
     wb.save(output_path)
     print(f"Archivo exportado: {output_path}")
