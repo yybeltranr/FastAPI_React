@@ -534,7 +534,7 @@ def encontrar_maximo_movimiento(pdf_path, banco):
 
     return format_number_with_commas(max_abs_value)
 
-def exportar_a_excel(resultados, valores_frontend, fecha_conciliacion, responsable_cargo, poliza, plantilla_path, output_path):
+def exportar_a_excel(resultados, valores_frontend, fecha_conciliacion, fecha_cierre, responsable_cargo, poliza, plantilla_path, output_path):
     wb = load_workbook(plantilla_path)
     hoja = wb.worksheets[2]  # tercera hoja
     fila_inicio = 11
@@ -569,7 +569,7 @@ def exportar_a_excel(resultados, valores_frontend, fecha_conciliacion, responsab
                 col = chr(ord("I") + j)  # I, J, K, L
                 hoja[f"{col}{fila}"] = normalizar_numero(val) if normalizar_numero(val) is not None else val
 
-            # Celda M11 vacía
+            # Max_movimiento
             hoja[f"M{fila}"] = archivo["resultado"].get("max_movimiento", "")
 
             # Tasa
@@ -584,8 +584,8 @@ def exportar_a_excel(resultados, valores_frontend, fecha_conciliacion, responsab
             # Fecha constitución
             hoja[f"Q{fila}"] = valores.get("fecha", "")
 
-            # Celda R vacía
-            hoja[f"R{fila}"] = ""
+            # Fecha cierre
+            hoja[f"R{fila}"] = fecha_cierre.split('T')[0].replace("-", "/") if fecha_cierre else ""
 
             # Fecha conciliación
             hoja[f"S{fila}"] = fecha_conciliacion.split('T')[0].replace("-", "/") if fecha_conciliacion else ""

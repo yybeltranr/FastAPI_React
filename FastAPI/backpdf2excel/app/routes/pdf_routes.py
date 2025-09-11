@@ -31,6 +31,7 @@ async def exportar_excel_endpoint(data: dict):
     resultados = data.get("resultados", {})  # resultados por banco
     valores_frontend = data.get("valores_frontend", {})  # valores del frontend
     fecha_conciliacion = data.get("fechaConciliacion", None)
+    fecha_cierre = data.get("fechaCierre", None)
     responsable_cargo = data.get("responsableCargo", "")
     poliza = data.get("poliza", "")
 
@@ -38,6 +39,7 @@ async def exportar_excel_endpoint(data: dict):
         resultados=resultados,
         valores_frontend=valores_frontend,
         fecha_conciliacion=fecha_conciliacion,
+        fecha_cierre=fecha_cierre,
         responsable_cargo=responsable_cargo,
         poliza=poliza,
         plantilla_path=plantilla_path,

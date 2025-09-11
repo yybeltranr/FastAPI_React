@@ -31,6 +31,7 @@ function Home() {
   const [isEditing, setIsEditing] = useState(false);
   const [valores, setValores] = useState({});
   const [isEditingExcel, setIsEditingExcel] = useState(false);
+  const [fechaCierre, setFechaCierre] = useState(null);
   const [fechaConciliacion, setFechaConciliacion] = useState(null);
   const [responsableCargo, setResponsableCargo] = useState("");
   const [poliza, setPoliza] = useState("");
@@ -57,6 +58,7 @@ function Home() {
             tasa: "",
             fecha: utilizacion ? utilizacion.fecha : "",
             observaciones: "",
+            fechaCierre: ""
           };
         }
       });
@@ -215,6 +217,7 @@ function Home() {
     try {
       const valoresParaEnviar = JSON.parse(JSON.stringify(valores));
       const payload = {
+        fechaCierre,
         fechaConciliacion,
         responsableCargo,
         poliza,
@@ -501,7 +504,28 @@ function Home() {
                                 actualizar(keyArchivo, "observaciones", e.target.value)
                               }
                             />
+
+                            <label htmlFor="fechaCierre" className="form-label fst-italic fw-medium me-4">
+                              Fecha de cierre
+                            </label>
+                            <Controller
+                              control={control}
+                              name="fechaCierre"
+                              render={({ field }) => (
+                                <DatePicker
+                                  className="form-control"
+                                  selected={field.value}
+                                  onChange={field.onChange}
+                                  dateFormat="dd/MM/yyyy"
+                                  placeholderText="Seleccione una fecha"
+                                  showMonthDropdown
+                                  showYearDropdown
+                                  dropdownMode="select"
+                                />
+                              )}
+                            />
                           </div>
+
                           <div className="d-flex justify-content-center">
                             <button
                               type="button"
@@ -512,6 +536,7 @@ function Home() {
                               {isEditing ? "Guardar" : "Editar campos inhabilitados"}
                             </button>
                           </div>
+                          
                           <hr />
                         </div>
                       );
@@ -526,6 +551,10 @@ function Home() {
         <hr />
 
         <div className="d-flex justify-content-center align-items-center flex-column"> 
+          <p className="text-muted fst-italic" style={{ fontSize: '0.9em' }}>
+            <b>Nota: </b>El botón para generar el informe en Excel solo se activará una vez hayas rellenado 
+            los campos obligatorios * de todos los archivos procesados. El campo Observaciones es opcional.
+          </p>
           <button 
             type="button" 
             className="btn buttons text-center m-4" 
@@ -616,7 +645,7 @@ function Home() {
               value={poliza}
               onChange={(e) => setPoliza(e.target.value)}
             />
-            <label htmlFor="fechaConciliacion" className="form-label fst-italic fw-medium">
+            <label htmlFor="fechaConciliacion" className="form-label fst-italic fw-medium  me-4">
               Fecha de conciliación
             </label>
             <Controller
