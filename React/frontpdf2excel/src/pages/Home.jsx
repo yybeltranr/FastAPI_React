@@ -204,7 +204,11 @@ function Home() {
         icon: "warning",
         title: "Campos incompletos",
         text: "Por favor, complete todos los campos obligatorios * antes de generar el informe. Las observaciones son opcionales.",
-        confirmButtonText: "Aceptar"
+        confirmButtonText: "Aceptar",
+        confirmButtonColor: "#00C29D",
+        customClass: {
+          confirmButton: "swal-confirm-btn"
+        }
       });
       return;
     }
@@ -250,6 +254,11 @@ function Home() {
         icon: 'success',
         title: 'Éxito',
         text: 'El informe en Excel se ha generado y descargado correctamente.',
+        confirmButtonText: 'Aceptar',
+        confirmButtonColor: '#00C29D',
+        customClass: {
+          confirmButton: 'swal-confirm-btn'
+        }
       });
     } catch (error) {
       console.error("Error descargando el Excel:", error);
@@ -257,6 +266,11 @@ function Home() {
         icon: 'error',
         title: 'Error',
         text: 'No se pudo generar el Excel. Intenta nuevamente.',
+        confirmButtonText: 'Aceptar',
+        confirmButtonColor: '#00C29D',
+        customClass: {
+          confirmButton: 'swal-confirm-btn'
+        }
       });
     }
   };
