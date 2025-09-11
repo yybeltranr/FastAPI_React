@@ -1,4 +1,4 @@
-from fastapi import APIRouter, UploadFile, File
+from fastapi import APIRouter, UploadFile, File, Form
 import shutil, os
 
 from fastapi.responses import FileResponse
@@ -11,12 +11,12 @@ UPLOAD_DIR = "uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 @router.post("/procesar")
-async def procesar_pdf_route(file: UploadFile = File(...)):
+async def procesar_pdf_route(file: UploadFile = File(...), banco: str = Form(...)):
     file_path = os.path.join(UPLOAD_DIR, file.filename)
     with open(file_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
 
-    resultado = procesar_pdf(file_path)
+    resultado = procesar_pdf(file_path, banco)
     return resultado
 
 @router.post("/exportar-excel")

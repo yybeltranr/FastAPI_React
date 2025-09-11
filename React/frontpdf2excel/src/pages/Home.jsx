@@ -99,7 +99,6 @@ function Home() {
     setProcesando(true);
     setExcelListo(false);
     const nuevosResultados = {};
-    const nuevosValores = {};
 
     for (const banco of seleccionados) {
       nuevosResultados[banco.nombre] = [];
@@ -107,6 +106,7 @@ function Home() {
       for (const file of archivos[banco.id] || []) {
         const formData = new FormData();
         formData.append("file", file);
+        formData.append("banco", banco.nombre);
 
         const response = await fetch(`${API_BASE_URL}/pdf/procesar`, {
           method: "POST",
@@ -119,27 +119,10 @@ function Home() {
           nombreArchivo: file.name,
           resultado: data,
         });
-
-        // Inicializamos valores para este archivo
-        const keyArchivo = `${banco.nombre}-${nuevosResultados[banco.nombre].length - 1}`;
-        const rawNumero = data?.texto?.["NÚMERO"] ?? data?.texto?.["NUMERO"] ?? "";
-        const cleanNumero = rawNumero.toString().replace(/\D/g, "");
-        const found = findUtilizacionByNumero(cleanNumero, utilizaciones);
-        const utilizacion = found?.u;
-
-        nuevosValores[keyArchivo] = {
-          subcuenta: { id: 3, nombre: tiposCaja.find(c => c.id === 3)?.nombre || "" },
-          moneda: { id: 1, nombre: monedas.find(m => m.id === 1)?.nombre || "" },
-          utilizacionTexto: utilizacion ? utilizacion.nombre : cleanNumero,
-          tasa: "",
-          fecha: utilizacion ? utilizacion.fecha : "",
-          observaciones: "",
-        };
       }
     }
 
     setResultados(nuevosResultados);
-    setValores(prev => ({ ...prev, ...nuevosValores }));
     setProcesando(false);
     setExcelListo(true);
   };
@@ -430,6 +413,11 @@ function Home() {
                                   <strong>{key}:</strong> {value}
                                 </li>
                               ))}
+                            {archivo.resultado?.max_movimiento && (
+                              <li className="list-group-item">
+                                <strong>Movimiento mas grande del mes:</strong> {archivo.resultado.max_movimiento}
+                              </li>
+                            )}
                           </ul>
 
                           {/* Campos editables */}
@@ -483,9 +471,14 @@ function Home() {
                               className="form-control mb-2"
                               placeholder="Ingrese la tasa (%)"
                               value={valoresArchivo.tasa}
-                              onChange={(e) =>
-                                actualizar(keyArchivo, "tasa", e.target.value)
-                              }
+                              min="0"
+                              onChange={(e) => {
+                                const value = e.target.value;
+                                const regex = /^[0-9]*\.?[0-9]*$/;
+                                if (regex.test(value)) {
+                                  actualizar(keyArchivo, "tasa", value);
+                                }
+                              }}
                             />
 
                             <label className="form-label fst-italic fw-medium">* Fecha de constitución:</label>

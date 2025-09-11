@@ -223,7 +223,3 @@ outputs/
 node_modules/
 dist/
 build/
-
-# Excel, logs u otros archivos generados
-*.xlsx
-*.xls

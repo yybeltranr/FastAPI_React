@@ -119,7 +119,29 @@ def extraer_texto(pdf_path):
         print(f"[ERROR] {e}")
         return {k: "PDF no se puede leer" for k in ["CUENTA", "NÚMERO"]}
 
+def normalizar_numero(valor: str):
+    if not valor or str(valor).strip() in ["", ".", ","]:
+        return None
 
+    limpio = str(valor).replace("$", "").replace(" ", "").strip()
+
+    # Si tiene miles con coma y decimal con punto: 623,548.25
+    if re.match(r"^\d{1,3}(?:,\d{3})*\.\d{2}$", limpio):
+        limpio = limpio.replace(",", "")  # quitar separador de miles
+    # Si tiene miles con punto y decimal con coma: 623.548,25
+    elif re.match(r"^\d{1,3}(?:\.\d{3})*,\d{2}$", limpio):
+        limpio = limpio.replace(".", "").replace(",", ".")  # convertir decimal a punto
+    # Solo coma como decimal: 12345,25
+    elif "," in limpio and "." not in limpio:
+        limpio = limpio.replace(",", ".")
+    # Solo punto como decimal: 12345.25
+    # de lo contrario, dejarlo como está
+
+    try:
+        return float(limpio)
+    except ValueError:
+        return None
+    
 def extraer_davivienda(lines, ultimos4):
     cuenta = "No encontrado"
     numero = "No encontrado"
@@ -135,7 +157,6 @@ def extraer_davivienda(lines, ultimos4):
             break
 
     return {"CUENTA": cuenta, "NÚMERO": numero}
-
 
 def extraer_tablas(pdf_path):
     patrones = {
@@ -298,7 +319,6 @@ def extraer_tablas(pdf_path):
 
     return info_tablas_ordenado
 
-
 def find_sequential_words_coords_all(pdf_path, word1, word2, word3, y_tolerance=1):
     """
     Busca tres palabras secuenciales en la misma línea en todo el documento.
@@ -401,12 +421,28 @@ def get_numbers_below_coordinates(pdf_path, coordinates_list):
 
 def format_number_with_commas(number):
     """
-    Formatea un número (float o int) a una cadena con comas como separadores
-    de miles y dos decimales.
+    Formatea un número (float o int) a una cadena con puntos como separadores
+    de miles y una coma como separador decimal. Quita el signo negativo.
+    Ejemplo: 2.302.353,40
     """
     if not isinstance(number, (int, float)):
         return None
-    return f"{number:,.2f}"
+
+    # 1. Quitar el signo negativo y formatear con 2 decimales y coma como decimal
+    number = abs(number)
+    formatted_number = f"{number:,.2f}"
+
+    # 2. Reemplazar los separadores
+    # El formato por defecto de Python es con coma (,) para miles y punto (.) para decimales.
+    # Necesitamos revertir eso.
+    # Paso a paso:
+    # a. Reemplazamos la coma por un carácter temporal (ej. 'X') para evitar conflictos.
+    # b. Reemplazamos el punto por la coma.
+    # c. Reemplazamos el carácter temporal por el punto.
+    
+    formatted_number = formatted_number.replace(",", "X").replace(".", ",").replace("X", ".")
+    
+    return formatted_number
 
 def clean_number_string(number_str):
     """
@@ -498,31 +534,6 @@ def encontrar_maximo_movimiento(pdf_path, banco):
 
     return format_number_with_commas(max_abs_value)
 
-
-def normalizar_numero(valor: str):
-    if not valor or str(valor).strip() in ["", ".", ","]:
-        return None
-
-    limpio = str(valor).replace("$", "").replace(" ", "").strip()
-
-    # Si tiene miles con coma y decimal con punto: 623,548.25
-    if re.match(r"^\d{1,3}(?:,\d{3})*\.\d{2}$", limpio):
-        limpio = limpio.replace(",", "")  # quitar separador de miles
-    # Si tiene miles con punto y decimal con coma: 623.548,25
-    elif re.match(r"^\d{1,3}(?:\.\d{3})*,\d{2}$", limpio):
-        limpio = limpio.replace(".", "").replace(",", ".")  # convertir decimal a punto
-    # Solo coma como decimal: 12345,25
-    elif "," in limpio and "." not in limpio:
-        limpio = limpio.replace(",", ".")
-    # Solo punto como decimal: 12345.25
-    # de lo contrario, dejarlo como está
-
-    try:
-        return float(limpio)
-    except ValueError:
-        return None
-    
-
 def exportar_a_excel(resultados, valores_frontend, fecha_conciliacion, responsable_cargo, poliza, plantilla_path, output_path):
     wb = load_workbook(plantilla_path)
     hoja = wb.worksheets[2]  # tercera hoja
@@ -559,7 +570,7 @@ def exportar_a_excel(resultados, valores_frontend, fecha_conciliacion, responsab
                 hoja[f"{col}{fila}"] = normalizar_numero(val) if normalizar_numero(val) is not None else val
 
             # Celda M11 vacía
-            hoja[f"M{fila}"] = ""
+            hoja[f"M{fila}"] = archivo["resultado"].get("max_movimiento", "")
 
             # Tasa
             hoja[f"N{fila}"] = valores.get("tasa", "")
@@ -577,7 +588,7 @@ def exportar_a_excel(resultados, valores_frontend, fecha_conciliacion, responsab
             hoja[f"R{fila}"] = ""
 
             # Fecha conciliación
-            hoja[f"S{fila}"] = fecha_conciliacion.split('T')[0].replace("-", "/") or ""
+            hoja[f"S{fila}"] = fecha_conciliacion.split('T')[0].replace("-", "/") if fecha_conciliacion else ""
 
             # Observaciones
             hoja[f"T{fila}"] = valores.get("observaciones", "")
