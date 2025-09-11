@@ -116,7 +116,6 @@ function Home() {
         });
         
         const data = await response.json();
-        console.log("Respuesta del backend para el archivo", data);
         nuevosResultados[banco.nombre].push({
           nombreArchivo: file.name,
           resultado: data,
@@ -227,9 +226,8 @@ function Home() {
         poliza,
         resultados,
         valores_frontend: valoresParaEnviar
-      };
-
-      console.log("Payload que se enviará al backend:", payload);
+      }; 
+      
       const response = await fetch(`${API_BASE_URL}/pdf/exportar-excel`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -565,7 +563,7 @@ function Home() {
 
         <hr />
 
-        <div className="d-flex justify-content-center align-items-center flex-column"> 
+        <div className="d-flex justify-content-center align-items-center flex-column m-4"> 
           <p className="text-muted fst-italic" style={{ fontSize: '0.9em' }}>
             <b>Nota: </b>El botón para generar el informe en Excel solo se activará una vez hayas rellenado 
             los campos obligatorios * de todos los archivos procesados. El campo Observaciones es opcional.
