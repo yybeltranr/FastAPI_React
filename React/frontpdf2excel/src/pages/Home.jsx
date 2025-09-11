@@ -21,11 +21,11 @@ function Home() {
 
   const [seleccionados, setSeleccionados] = useState([]);
   const [archivos, setArchivos] = useState({});
-  const [showModal, setShowModal] = useState(false);
+  //const [showModal, setShowModal] = useState(false);
   const [excelListo, setExcelListo] = useState(false);
   const [showModalGenerar, setShowModalGenerar] = useState(false);
-  const [password, setPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
+  //const [password, setPassword] = useState("");
+  //const [showPassword, setShowPassword] = useState(false);
   const [resultados, setResultados] = useState({});
   const [procesando, setProcesando] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
@@ -66,12 +66,12 @@ function Home() {
     setValores(prev => ({ ...prev, ...nuevosValores }));
   }, [resultados]);
 
-  const togglePasswordVisibility = () => setShowPassword(!showPassword);
+  //const togglePasswordVisibility = () => setShowPassword(!showPassword);
 
-  const closeModal = () => {
-    setPassword("");
-    setShowModal(false);
-  };
+  //const closeModal = () => {
+  //  setPassword("");
+  //  setShowModal(false);
+  //};
 
   const closeModalGenerar = () => setShowModalGenerar(false);
 
@@ -357,7 +357,8 @@ function Home() {
               className="btn buttons text-center m-4" 
               style={{width: '40%'}} 
               disabled={!botonHabilitado}
-              onClick={() => setShowModal(true)}
+              /* onClick={() => setShowModal(true)} */
+              onClick={procesarArchivos}
             >
               Procesar todos los archivos
             </button>
@@ -582,7 +583,7 @@ function Home() {
       </div>
 
       {/* Modal Password */}
-      <ModalComponent 
+      {/* <ModalComponent 
         show={showModal}
         handleClose={closeModal}
         titulo="Password"
@@ -628,7 +629,7 @@ function Home() {
         customButton={''}
         dialogClass="modal-md"
         showFooter={false}
-      />
+      /> */}
 
       {/* Modal Generar Excel */}
       <ModalComponent 
