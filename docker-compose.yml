@@ -1,0 +1,22 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ./FastAPI/backpdf2excel
+      dockerfile: Dockerfile
+    ports:
+      - "${BACKEND_PORT}:8000"
+    volumes:
+      - ./FastAPI/backpdf2excel/app:/app/app
+    container_name: fastapi_backend
+
+  frontend:
+    build:
+      context: ./React/frontpdf2excel
+      dockerfile: Dockerfile
+    ports:
+      - "${FRONTEND_PORT}:80" # Expone el frontend en el puerto 8080 del host
+    container_name: react_frontend
+    depends_on:
+      - backend

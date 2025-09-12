@@ -1,0 +1,20 @@
+version: '3.8'
+
+services:
+  backend:
+    # En producción, no queremos exponer el puerto del backend directamente.
+    # Al no definir 'ports', anulamos la configuración del archivo base.
+    ports: []
+    
+    # Tampoco queremos un volumen. El código debe estar dentro de la imagen.
+    # Una lista vacía anula la configuración del archivo base.
+    volumes: []
+
+  frontend:
+    # No necesitamos anular nada para el frontend, su configuración base ya es correcta
+    # para producción, pero lo dejamos aquí por claridad.
+    build:
+      context: ./React/frontpdf2excel
+      dockerfile: Dockerfile
+    ports:
+      - "${FRONTEND_PORT}:80"
