@@ -14,6 +14,11 @@ def extraer_texto(pdf_path):
                 all_text += txt + "\n"
 
         # Limpiar líneas
+        whole_text = all_text.replace('\xa0', ' ')
+        whole_text = re.sub(r'[\u200B-\u200D\uFEFF]', '', whole_text)   # zero-width
+        # opcional: colapsar espacios múltiples
+        whole_text = re.sub(r'[ \t]{2,}', '  ', whole_text)  # conserva "columnas" con varios espacios
+
         lines = [ln.strip() for ln in all_text.splitlines() if ln.strip()]
         whole_text = "\n".join(lines)
 
@@ -31,7 +36,7 @@ def extraer_texto(pdf_path):
 
         # Elegir primero cuentas largas, si no hay usar cortas
         if m_cuenta:
-            numero_en_nombre = m_cuenta[0]
+            numero_en_nombre = max(m_cuenta, key=len)
         elif m_cuenta_short:
             # limpiar por si trae guiones o puntos
             numero_en_nombre = re.sub(r"[^\d]", "", m_cuenta_short[0])
@@ -50,12 +55,14 @@ def extraer_texto(pdf_path):
             "NÚMERO": [
                 r"No\.\s+Inversión\s*\n\s*([\d\s]{6,40})", # FiduOccidente
                 r"Cuenta\s*no\.?\s*\n\s*([\d\-]{6,30})", #Cuenta no. minúsculas con salto
+                r"Cuenta\s*no\.?\s*\n\s*([\d]{2,6}(?:-\d{2,10})+)", #Cuenta no. minúsculas con salto y guion
                 r"CUENTA\s+DE\s+AHORROS\s*\n\s*([\d\s]{6,40})", # Davivienda (con espacios y salto)
                 r"CUENTA\s+DE\s+AHORROS\s*([\d\s]{6,40})", # Davivienda (con espacios, sin salto)
                 r"CUENTA\s+No\.?\s*\n\s*([\d\s\-]{6,30})", # CUENTA No. con salto
                 r"CUENTA\s+No\.?\s*([\d\-]+)",         # CUENTA No. inline con separadores -
                 r"CUENTA\s+No\.?\s*(\d+)",            # CUENTA No. inline
                 r"No\.?\s+([\d\-]{6,30})",
+                r"((?:\d(?:[\s\-\.\u00A0]?)){6,19}\d)",
                 r"^\d{10,20}$",                       # puro dígito
                 r"No(?!\.)\s*(\d+)",                  # No 1234
                 r"NÚMERO\s*([0-9]+)",                 # genérico
@@ -103,6 +110,14 @@ def extraer_texto(pdf_path):
             else:
                 info_textual[key] = val.strip() if val else "No encontrado"
 
+        # Caso especial: formato "Cuenta no." en una línea y el número en la siguiente
+        if info_textual.get("NÚMERO") == "No encontrado":
+            m = re.search(r"Cuenta\s*no\.?\s*\n\s*([\d]{2,6}(?:-\d{2,10})+)", whole_text, re.IGNORECASE)
+            if m:
+                val = m.group(1)
+                limpio = re.sub(r"[^\d]", "", val)  # limpiar guiones y espacios
+                info_textual["NÚMERO"] = limpio
+
         if info_textual["CUENTA"] == "No encontrado" and info_textual["NÚMERO"] == "No encontrado":
             # Caso especial Davivienda
             davivienda_info = extraer_davivienda(lines, ultimos4)
@@ -118,6 +133,23 @@ def extraer_texto(pdf_path):
     except Exception as e:
         print(f"[ERROR] {e}")
         return {k: "PDF no se puede leer" for k in ["CUENTA", "NÚMERO"]}
+    
+def extraer_davivienda(lines, ultimos4):
+    cuenta = "No encontrado"
+    numero = "No encontrado"
+
+    for i, ln in enumerate(lines):
+        if re.search(r"CUENTA\s+DE\s+AHORROS", ln, re.IGNORECASE):
+            if i + 1 < len(lines):
+                candidato = lines[i+1].strip()
+                limpio = re.sub(r"[^\d]", "", candidato)
+                if ultimos4 and limpio.endswith(ultimos4) and 8 <= len(limpio) <= 20:
+                    numero = limpio
+                    cuenta = "AHORROS"
+            break
+
+    return {"CUENTA": cuenta, "NÚMERO": numero}
+
 
 def normalizar_numero(valor: str):
     if not valor or str(valor).strip() in ["", ".", ","]:
@@ -142,21 +174,6 @@ def normalizar_numero(valor: str):
     except ValueError:
         return None
     
-def extraer_davivienda(lines, ultimos4):
-    cuenta = "No encontrado"
-    numero = "No encontrado"
-
-    for i, ln in enumerate(lines):
-        if re.search(r"CUENTA\s+DE\s+AHORROS", ln, re.IGNORECASE):
-            if i + 1 < len(lines):
-                candidato = lines[i+1].strip()
-                limpio = re.sub(r"[^\d]", "", candidato)
-                if ultimos4 and limpio.endswith(ultimos4) and 8 <= len(limpio) <= 20:
-                    numero = limpio
-                    cuenta = "AHORROS"
-            break
-
-    return {"CUENTA": cuenta, "NÚMERO": numero}
 
 def extraer_tablas(pdf_path):
     patrones = {
@@ -166,12 +183,14 @@ def extraer_tablas(pdf_path):
             r"SALDO\s+CIERRE\s+MES\s+ANTERIOR",
         ],
 
-        # MOVIMIENTO DE INGRESOS
+        # MOVIMIENTO DE INGRESOS 
         "MOVIMIENTO DE INGRESOS": [
             r"TOTAL\s+ABONOS",
             r"CREDITOS?",
             r"ABONOS",
             r"DEPOSITOS\s+Y\s+OTROS\s+CREDITOS",
+            r"INTERESES\s+RECIBIDOS",
+            r"Más\s+Créditos",
         ],
 
         # MOVIMIENTO DE EGRESOS
@@ -180,6 +199,10 @@ def extraer_tablas(pdf_path):
             r"TOTAL\s+CARGOS",
             r"CARGOS?",
             r"RETIROS\s+Y\s+OTROS\s+DEBITOS",
+            r"\bIVA\b",
+            r"4\s*POR\s*MIL",
+            r"RETENCIONES?",
+            r"Menos\s+Débitos",
         ],
 
         # SALDO EN PESOS A FINAL DE MES
@@ -191,12 +214,27 @@ def extraer_tablas(pdf_path):
         ]
     }
 
+    info_tablas = {}
+
     #numero_regex = r"(?:\d{1,2}\s+)?[\$]?\s*([\d]{1,3}(?:[.,]\d{3})*(?:[.,]\d{2})?)"
     # captura números con o sin separadores y decimales
     #numero_regex = r"[\$]?\s*\d{1,3}(?:[.,]\d{3})*(?:[.,]\d{2})?"
-    numero_regex = r"[\$]?\s*(?:\d{1,3}(?:[.,]\d{3})*|\d+)?[.,]\d{2}"
+    #numero_regex = r"[\$]?\s*(?:\d{1,3}(?:[.,]\d{3})*|\d+)?[.,]\d{2}"
+    #numero_regex = r"(?<!\w)[\$]?\s*\d*(?:[.,]\d{3})*(?:[.,]\d{2})(?!\w)"
+    #numero_regex = r"(?<!\w)[\$]?\s*(?:\d{1,2}\s+)?(?:\d{1,3}(?:[.,]\d{3})*|)(?:[.,]\d{2})(?!\w)"
+    #numero_regex = r"(?<!\w)[\$]?\s*(?:\d{1,2}(?![.,])\s+)?\d{1,3}(?:[.,]\d{3})*(?:[.,]\d{2})(?!\w)"
+    #numero_regex = r"(?<!\w)(?:\$?\s*(?:\d{1,2}(?![.,])\s+)?)((?:\d{1,3}(?:[.,]\d{3})*)(?:[.,]\d{2})?|[.,]\d{2})(?!\w)"
+    numero_regex = (
+        r"(?<!\w)"                                   # no pegado a palabra a la izquierda
+        r"(?:\$?\s*(?:\d{1,2}(?![.,])\s+)?)"         # columna intermedia opcional (1-2 dígitos) NO seguida de . o ,
+        r"("                                         # <-- único grupo de captura: el monto
+        r"(?:\d{1,3}(?:[.,]\d{3})*)"               # entero con separadores de miles opcionales
+        r"(?:[.,]\d{2})?"                          # decimal opcional (si existe, 2 dígitos)
+        r"|[.,]\d{2}"                              # o decimal-only (.56 o ,56)
+        r")"
+        r"(?!\w)"
+    )
 
-    info_tablas = {}
     usados = set()
 
     with pdfplumber.open(pdf_path) as pdf:
@@ -223,7 +261,7 @@ def extraer_tablas(pdf_path):
             CLAVE_SALDO_FINAL = "SALDO EN PESOS A FINAL DE MES"
             # ========= Caso especial 1: formato "Saldo inicial a 30/Jun/2025 ..." =========
             if "saldo inicial" in texto.lower() and "saldo final" in texto.lower():
-                saldo_inicial_match = re.search(r"Saldo\s+inicial.*?:\s*\$?\s*(" + numero_regex + ")", texto, re.IGNORECASE)
+                saldo_inicial_match = re.search(r"Saldo\s+inicial(?:\s+a\s*\d{1,2}[/-]\d{1,2}[/-]\d{2,4})?\s*[:\-]?\s*\$?\s*(" + numero_regex + ")", texto, re.IGNORECASE)
                 saldo_final_match   = re.search(r"Saldo\s+final.*?:\s*\$?\s*(" + numero_regex + ")", texto, re.IGNORECASE)
 
                 if saldo_inicial_match:
@@ -237,7 +275,8 @@ def extraer_tablas(pdf_path):
                 # Ingresos/Egresos
                 ingresos = []
                 for label in ["Aportes", "Rendimientos"]:
-                    m = re.search(label + r".*?\$?\s*(" + numero_regex + ")", texto, re.IGNORECASE)
+                    #m = re.search(label + r".*?\$?\s*(" + numero_regex + ")", texto, re.IGNORECASE)
+                    m = re.search(label + r".*?\$?\s*" + numero_regex, texto, re.IGNORECASE)
                     if m: ingresos.append(m.group(1).strip())
                 if ingresos:
                     info_tablas["MOVIMIENTO DE INGRESOS"] = " + ".join(ingresos)
@@ -245,7 +284,8 @@ def extraer_tablas(pdf_path):
 
                 egresos = []
                 for label in ["Retiros", "Ajustes", "GMF", "Gravamen", "Retención"]:
-                    m = re.search(label + r".*?\$?\s*(" + numero_regex + ")", texto, re.IGNORECASE)
+                    #m = re.search(label + r".*?\$?\s*(" + numero_regex + ")", texto, re.IGNORECASE)
+                    m = re.search(label + r".*?\$?\s*" + numero_regex, texto, re.IGNORECASE)
                     if m: egresos.append(m.group(1).strip() if label != "GMF" else m.group(1).strip())
                 if egresos:
                     info_tablas["MOVIMIENTO DE EGRESOS"] = " + ".join(egresos)
@@ -288,21 +328,37 @@ def extraer_tablas(pdf_path):
             for clave, lista_patrones in patrones.items():
                 if clave in usados:
                     continue
+                encontrados = []
                 for patron in lista_patrones:
-                    # buscamos el bloque de texto desde el patrón en adelante
-                    regex = rf"{patron}.*?(?:{numero_regex}(?:\s+{numero_regex})*)"
+                    #regex = rf"{patron}.*?(?:{numero_regex}(?:\s+{numero_regex})*)"
+                    regex = rf"{patron}\s*[:\-]?\s*[\$]?\s*{numero_regex}"
                     match = re.search(regex, texto, re.IGNORECASE | re.DOTALL)
                     if match:
-                        # extraemos todos los números del bloque
                         valores = re.findall(numero_regex, match.group(0))
                         if valores:
-                          candidatos = [v for v in valores if re.search(r"[.,]\d{2}$", v.strip())]
-                          if candidatos:
-                            valor = candidatos[-1]  # el último es el saldo real
-                            info_tablas[clave] = valor.strip()
-                            usados.add(clave)
-                            #print(f"[DEBUG] {clave} → '{match.group(0)}' → {valor}")
-                            break
+                            candidatos = [v.strip() for v in valores if re.search(r"[.,]\d{2}$", v.strip())]
+                            if candidatos:
+                                # guardamos el patrón que generó el valor
+                                encontrados.append((patron, candidatos[-1]))
+
+                if encontrados:
+                    # Extraer solo los valores
+                    solo_valores = [val for _, val in encontrados]
+                    # Eliminar duplicados manteniendo orden
+                    solo_valores = list(dict.fromkeys(solo_valores))
+
+                    if clave in ["MOVIMIENTO DE INGRESOS", "MOVIMIENTO DE EGRESOS"]:
+                        if len(solo_valores) == 1:
+                            # solo un valor (aunque venga de 2 patrones iguales) → mostrar solo 1
+                            info_tablas[clave] = solo_valores[0]
+                        else:
+                            # varios valores distintos → concatenar
+                            info_tablas[clave] = " + ".join(solo_valores)
+                    else:
+                        info_tablas[clave] = solo_valores[-1]
+
+                    usados.add(clave)
+                            
 
     for clave in patrones:
         if clave not in info_tablas:

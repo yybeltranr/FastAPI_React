@@ -62,7 +62,7 @@ const bancos = [
 
 // Bancos a trabajar
 const bancosFiltrados = bancos.filter(b =>
-  [2, 24, 30, 36, 6, 57, 48, 15].includes(b.id)
+  [24, 30, 36, 6, 57, 48, 15].includes(b.id)
 );
 
 // Ordenar por nombre alfabéticamente (sin modificar los ids)
@@ -111,4 +111,5 @@ export const utilizaciones = [
   { id: "214114089", nombre: "Manejo Convenio1058 de 2009", fecha: "2009/10/20" },
   { id: "1221201000015", nombre: "Manejo de recursos propios para todos los pagos de la empresa", fecha: "2025/02/28" },
   { id: "1101201000521", nombre: "Manejo de recursos propios para todos los pagos de la empresa", fecha: "2025/03/25" },
+  { id: "5500240329", nombre: "Manejo Convenio derivado 003151 entre la ERU y el IDRD", fecha: "2019/08/01" },
 ];

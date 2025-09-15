@@ -188,11 +188,11 @@ function Home() {
 
   const validarCampos = () => {
     for (const valoresArchivo of Object.values(valores)) {
-      if (!valoresArchivo.subcuenta && valoresArchivo.subcuenta !== 0) return false;
-      if (!valoresArchivo.moneda && valoresArchivo.moneda !== 0) return false;
+      if (valoresArchivo.subcuenta === undefined || valoresArchivo.subcuenta === null || valoresArchivo.subcuenta === "") return false;
+      if (valoresArchivo.moneda === undefined || valoresArchivo.moneda === null || valoresArchivo.moneda === "") return false;
       if (!valoresArchivo.utilizacionTexto || valoresArchivo.utilizacionTexto.trim() === "") return false;
-      if (!valoresArchivo.tasa || valoresArchivo.tasa === "") return false;
-      if (!valoresArchivo.fecha || valoresArchivo.fecha.trim() === "") return false;
+      if (valoresArchivo.tasa === undefined || valoresArchivo.tasa === null || valoresArchivo.tasa === "") return false;
+      if (!valoresArchivo.fecha || (typeof valoresArchivo.fecha === "string" && valoresArchivo.fecha.trim() === "")) return false;
     }
     return true;
   };
