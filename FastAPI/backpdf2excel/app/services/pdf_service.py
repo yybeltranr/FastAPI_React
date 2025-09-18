@@ -14,11 +14,6 @@ def extraer_texto(pdf_path):
                 all_text += txt + "\n"
 
         # Limpiar líneas
-        whole_text = all_text.replace('\xa0', ' ')
-        whole_text = re.sub(r'[\u200B-\u200D\uFEFF]', '', whole_text)   # zero-width
-        # opcional: colapsar espacios múltiples
-        whole_text = re.sub(r'[ \t]{2,}', '  ', whole_text)  # conserva "columnas" con varios espacios
-
         lines = [ln.strip() for ln in all_text.splitlines() if ln.strip()]
         whole_text = "\n".join(lines)
 
@@ -36,7 +31,7 @@ def extraer_texto(pdf_path):
 
         # Elegir primero cuentas largas, si no hay usar cortas
         if m_cuenta:
-            numero_en_nombre = max(m_cuenta, key=len)
+            numero_en_nombre = m_cuenta[0]
         elif m_cuenta_short:
             # limpiar por si trae guiones o puntos
             numero_en_nombre = re.sub(r"[^\d]", "", m_cuenta_short[0])
@@ -55,14 +50,12 @@ def extraer_texto(pdf_path):
             "NÚMERO": [
                 r"No\.\s+Inversión\s*\n\s*([\d\s]{6,40})", # FiduOccidente
                 r"Cuenta\s*no\.?\s*\n\s*([\d\-]{6,30})", #Cuenta no. minúsculas con salto
-                r"Cuenta\s*no\.?\s*\n\s*([\d]{2,6}(?:-\d{2,10})+)", #Cuenta no. minúsculas con salto y guion
                 r"CUENTA\s+DE\s+AHORROS\s*\n\s*([\d\s]{6,40})", # Davivienda (con espacios y salto)
                 r"CUENTA\s+DE\s+AHORROS\s*([\d\s]{6,40})", # Davivienda (con espacios, sin salto)
                 r"CUENTA\s+No\.?\s*\n\s*([\d\s\-]{6,30})", # CUENTA No. con salto
                 r"CUENTA\s+No\.?\s*([\d\-]+)",         # CUENTA No. inline con separadores -
                 r"CUENTA\s+No\.?\s*(\d+)",            # CUENTA No. inline
                 r"No\.?\s+([\d\-]{6,30})",
-                r"((?:\d(?:[\s\-\.\u00A0]?)){6,19}\d)",
                 r"^\d{10,20}$",                       # puro dígito
                 r"No(?!\.)\s*(\d+)",                  # No 1234
                 r"NÚMERO\s*([0-9]+)",                 # genérico
@@ -109,14 +102,6 @@ def extraer_texto(pdf_path):
                         info_textual[key] = "No encontrado"
             else:
                 info_textual[key] = val.strip() if val else "No encontrado"
-
-        # Caso especial: formato "Cuenta no." en una línea y el número en la siguiente
-        if info_textual.get("NÚMERO") == "No encontrado":
-            m = re.search(r"Cuenta\s*no\.?\s*\n\s*([\d]{2,6}(?:-\d{2,10})+)", whole_text, re.IGNORECASE)
-            if m:
-                val = m.group(1)
-                limpio = re.sub(r"[^\d]", "", val)  # limpiar guiones y espacios
-                info_textual["NÚMERO"] = limpio
 
         if info_textual["CUENTA"] == "No encontrado" and info_textual["NÚMERO"] == "No encontrado":
             # Caso especial Davivienda
